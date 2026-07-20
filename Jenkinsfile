@@ -4,8 +4,8 @@ pipeline {
   environment {
     REGISTRY_URL    = 'https://ghcr.io'
     // GitHub: use your own username (lowercase for GH_NAMESPACE)
-    GH_NAMESPACE    = 'ssmani5491'   // lowercase
-    GH_OWNER        = 'ssmani5491'   // GitHub username (must match repository owner)
+    GH_NAMESPACE    = 'aadarsh0507'   // lowercase
+    GH_OWNER        = 'aadarsh0507'   // GitHub username (must match repository owner)
     DOCKER_BUILDKIT = '1'
     // Jenkins → Credentials: kind "Username with password". ID must match this value (GitHub username + PAT).
     // Used for: docker login ghcr.io, image push, git release tag push.
