@@ -328,6 +328,89 @@ router.put('/:id', requirePermission('invoices', 'edit'), async (req, res) => {
   }
 });
 
+// Replaces an invoice's line items and recomputes totals server-side (never
+// trusting client-supplied prices/totals — same as invoice creation). If the
+// invoice was already approved, editing its items invalidates that approval:
+// the amount approvers signed off on no longer matches, so the chain resets
+// to pending at every level and must be re-approved from the top.
+router.put('/:id/items', requirePermission('invoices', 'edit'), async (req, res) => {
+  const { items, discount_percent } = req.body || {};
+
+  const conn = await pool.getConnection();
+  try {
+    await conn.beginTransaction();
+
+    const [invoiceRows] = await conn.query('SELECT * FROM invoices WHERE id = ? FOR UPDATE', [req.params.id]);
+    if (invoiceRows.length === 0) {
+      await conn.rollback();
+      return res.status(404).json({ error: 'Invoice not found.' });
+    }
+    const existingInvoice = invoiceRows[0];
+    req.auditBefore = existingInvoice;
+    req.auditIgnoreFields = ['created_by_name'];
+
+    const totals = await computeInvoiceTotals(conn, items, discount_percent);
+
+    await conn.query('DELETE FROM invoice_items WHERE invoice_id = ?', [req.params.id]);
+    for (const line of totals.lines) {
+      await conn.query(
+        `INSERT INTO invoice_items
+          (invoice_id, item_id, item_name, batch_no, expiry_date, quantity, mrp, line_total)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          req.params.id,
+          line.item_id,
+          line.item_name,
+          line.batch_no,
+          line.expiry_date,
+          line.quantity,
+          line.mrp,
+          line.line_total,
+        ]
+      );
+    }
+
+    const wasApproved = existingInvoice.approval_status === 'approved';
+
+    await conn.query(
+      `UPDATE invoices SET subtotal = ?, discount_percent = ?, discount_amount = ?, total_amount = ?
+       WHERE id = ?`,
+      [totals.subtotal, totals.discountPercent, totals.discountAmount, totals.totalAmount, req.params.id]
+    );
+
+    if (wasApproved) {
+      await conn.query(
+        `UPDATE invoice_approvals SET status = 'pending', acted_by = NULL, acted_at = NULL, remarks = NULL
+         WHERE invoice_id = ?`,
+        [req.params.id]
+      );
+      await conn.query('UPDATE invoices SET approval_status = ? WHERE id = ?', ['pending', req.params.id]);
+    }
+
+    await conn.commit();
+
+    const [rows] = await pool.query(
+      `SELECT invoices.*, users.full_name AS created_by_name
+       FROM invoices
+       LEFT JOIN users ON users.id = invoices.created_by
+       WHERE invoices.id = ?`,
+      [req.params.id]
+    );
+    const [itemRows] = await pool.query('SELECT * FROM invoice_items WHERE invoice_id = ?', [req.params.id]);
+
+    res.json({ ...rows[0], items: itemRows });
+  } catch (err) {
+    await conn.rollback();
+    if (err.status) {
+      return res.status(err.status).json({ error: err.message });
+    }
+    console.error('Update invoice items error:', err.message);
+    res.status(500).json({ error: 'Failed to update invoice items.' });
+  } finally {
+    conn.release();
+  }
+});
+
 router.get('/', requirePermission('invoices', 'view'), async (req, res) => {
   const { page = 1, pageSize = 20, from, to, patient_uhid, invoice_no } = req.query;
 
