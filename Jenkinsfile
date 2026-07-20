@@ -427,23 +427,30 @@ pipeline {
                                               usernameVariable: 'GH_USER',
                                               passwordVariable: 'GH_PAT')]) {
               try {
+                // Tags must go to the actual source repo (origin), which may have
+                // a different owner than GH_OWNER/GH_NAMESPACE (those control where
+                // the Docker image is published, not where the source code lives).
+                def originUrl = sh(returnStdout: true, script: "git config --get remote.origin.url").trim()
+                def repoPath = originUrl.replaceFirst(/^https?:\/\/[^\/]+\//, '').replaceFirst(/\.git$/, '')
+                env.SOURCE_REPO_PATH = repoPath
+
                 sh """
                   git config user.email "ci@jenkins"
                   git config user.name  "Jenkins CI"
-                  
+
                   # Check if tag already exists locally
                   if git tag -l | grep -q "^${env.NEXT_VERSION}\$"; then
                     echo "Tag ${env.NEXT_VERSION} already exists locally, deleting it first"
                     git tag -d ${env.NEXT_VERSION}
                   fi
-                  
+
                   # Check if tag exists on remote
-                  if git ls-remote --tags https://\${GH_USER}:\${GH_PAT}@github.com/${env.GH_OWNER}/${env.RAW_REPO}.git | grep -q "refs/tags/${env.NEXT_VERSION}\$"; then
+                  if git ls-remote --tags https://\${GH_USER}:\${GH_PAT}@github.com/${env.SOURCE_REPO_PATH}.git | grep -q "refs/tags/${env.NEXT_VERSION}\$"; then
                     echo "Tag ${env.NEXT_VERSION} already exists on remote, skipping tag creation"
                   else
                     echo "Creating new tag ${env.NEXT_VERSION}"
                     git tag -a ${env.NEXT_VERSION} -m "Release ${env.NEXT_VERSION} from Jenkins"
-                    git push https://\${GH_USER}:\${GH_PAT}@github.com/${env.GH_OWNER}/${env.RAW_REPO}.git ${env.NEXT_VERSION}
+                    git push https://\${GH_USER}:\${GH_PAT}@github.com/${env.SOURCE_REPO_PATH}.git ${env.NEXT_VERSION}
                   fi
                 """
                 echo "SUCCESS: Git tag operation completed"
