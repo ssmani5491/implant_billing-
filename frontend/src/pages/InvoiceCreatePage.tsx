@@ -403,7 +403,7 @@ export function InvoiceCreatePage() {
 
       {submitError && <div className="alert alert-error">{submitError}</div>}
 
-      <div className="form-actions">
+      <div className="form-actions card no-print">
         <button onClick={handleSubmit} disabled={!canSubmit}>
           {submitting ? 'Creating Invoice...' : 'Create Invoice'}
         </button>

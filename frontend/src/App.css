@@ -168,7 +168,7 @@ h3 {
 
 .form-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
   gap: 1rem;
 }
 
@@ -198,6 +198,10 @@ h3 {
   gap: 0.35rem;
   font-size: 0.85rem;
   color: var(--text-secondary);
+}
+
+.inline-form input[type='file'] {
+  width: 220px;
 }
 
 .search-input {
@@ -376,6 +380,10 @@ h3 {
 .form-actions {
   display: flex;
   justify-content: flex-end;
+}
+
+.form-actions.card {
+  padding: 1rem 1.5rem;
 }
 
 .filter-bar {

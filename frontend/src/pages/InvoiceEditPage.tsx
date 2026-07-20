@@ -174,7 +174,7 @@ export function InvoiceEditPage() {
 
       {saveError && <div className="alert alert-error">{saveError}</div>}
 
-      <div className="form-actions">
+      <div className="form-actions card no-print">
         <button onClick={handleSave} disabled={saving || !patientUhid.trim() || !patientName.trim()}>
           {saving ? 'Saving...' : 'Save Changes'}
         </button>
